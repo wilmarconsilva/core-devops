@@ -1,0 +1,71 @@
+# Proxy reverso da stack Core.
+# O Caddy resolve o TLS automaticamente (Let's Encrypt) para os domínios abaixo —
+# basta que os registros DNS A/AAAA já apontem para o IP do VPS antes do primeiro start.
+
+{
+	email {$ACME_EMAIL}
+	# Descomente durante testes para não gastar o rate limit do Let's Encrypt:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+(hardening) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# ============================================
+# API REST
+# ============================================
+{$API_DOMAIN} {
+	import hardening
+
+	# X-Forwarded-Proto/For são repassados pelo Caddy e lidos pelo UseForwardedHeaders
+	# em Production — é o que faz Request.IsHttps ser true e o cookie do refresh token
+	# receber Secure=true; SameSite=None.
+	reverse_proxy api:8080
+
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+}
+
+# ============================================
+# Aplicação Web (PWA)
+# ============================================
+{$WEB_DOMAIN} {
+	import hardening
+	header X-Frame-Options "SAMEORIGIN"
+
+	reverse_proxy web:8080
+
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+}
+
+# ============================================
+# ALTERNATIVA: domínio único (front em / e API em /api)
+# ============================================
+# Elimina CORS e cookie cross-site, ao custo de acoplar as duas apps ao mesmo host.
+# Requer rebuild do front com EXPO_PUBLIC_WEB_SERVICE_URL=https://SEU_DOMINIO/api.
+# As rotas dos controllers NÃO têm prefixo /api (ex.: /budgets, /authentication),
+# por isso o handle_path remove o prefixo antes de repassar.
+#
+# {$WEB_DOMAIN} {
+#     import hardening
+#     handle_path /api/* {
+#         reverse_proxy api:8080
+#     }
+#     handle {
+#         reverse_proxy web:8080
+#     }
+#     encode zstd gzip
+# }

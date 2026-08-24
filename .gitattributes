@@ -1,0 +1,7 @@
+# A stack roda em Linux: normaliza tudo para LF, inclusive no working tree do Windows.
+# Sem isso, scripts com CRLF falham no VPS com "bash: \r: command not found".
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.yml  text eol=lf
+Caddyfile text eol=lf
