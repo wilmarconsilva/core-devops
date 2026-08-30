@@ -1,0 +1,29 @@
+# Overlay para subir SEM domínio: teste local na sua máquina, ou VPS provisório
+# ainda sem DNS configurado. Sem TLS — tudo em HTTP, em um único host:porta,
+# roteado por caminho (ver Caddy/Caddyfile.without-domain).
+#
+# Uso:
+#   cp .env.example .env
+#   # ajuste ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY; API_DOMAIN/WEB_DOMAIN
+#   # podem ficar com o valor de exemplo, não são usados neste overlay.
+#   docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
+#
+# Acesso:
+#   http://localhost/          (web)      — ou http://PUBLIC_HOST/ se definido no .env
+#   http://localhost/api/...   (api)
+#
+# Deploy em VPS sem domínio: defina PUBLIC_HOST=<IP do VPS> no .env antes do build,
+# para o front embutir a URL correta da API e o CORS liberar essa origem.
+services:
+  api:
+    environment:
+      Cors__Origins__0: "http://${PUBLIC_HOST:-localhost}"
+
+  web-app:
+    build:
+      args:
+        EXPO_PUBLIC_WEB_SERVICE_URL: "http://${PUBLIC_HOST:-localhost}/api"
+
+  proxy:
+    volumes:
+      - ./Caddy/Caddyfile.without-domain:/etc/caddy/Caddyfile:ro

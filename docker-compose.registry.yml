@@ -10,6 +10,6 @@ services:
     image: ghcr.io/${GHCR_OWNER}/core-api:${IMAGE_TAG:-latest}
     build: !reset null
 
-  web:
-    image: ghcr.io/${GHCR_OWNER}/core-web:${IMAGE_TAG:-latest}
+  web-app:
+    image: ghcr.io/${GHCR_OWNER}/core-web-app:${IMAGE_TAG:-latest}
     build: !reset null

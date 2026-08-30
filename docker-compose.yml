@@ -84,6 +84,12 @@ services:
       Email__EnableSsl: ${EMAIL_ENABLE_SSL:-true}
     expose:
       - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - data
       - edge
@@ -92,16 +98,16 @@ services:
   # ============================================
   # Web (PWA estática servida por nginx)
   # ============================================
-  web:
+  web-app:
     build:
       context: ../core-front-end
-      dockerfile: Docker/Dockerfile.Web
+      dockerfile: Docker/Dockerfile
       args:
         # Variáveis EXPO_PUBLIC_* são embutidas no bundle em tempo de BUILD.
         # Trocar a URL da API exige rebuild da imagem — não basta reiniciar o container.
         EXPO_PUBLIC_WEB_SERVICE_URL: "https://${API_DOMAIN}"
         EXPO_PUBLIC_OPERATION_MODE: ${EXPO_PUBLIC_OPERATION_MODE:-}
-    image: core-web:local
+    image: core-web-app:local
     restart: unless-stopped
     expose:
       - "8080"
@@ -122,8 +128,10 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - api
-      - web
+      api:
+        condition: service_healthy
+      web-app:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -133,7 +141,7 @@ services:
       WEB_DOMAIN: ${WEB_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data      # certificados — NÃO apagar (rate limit do Let's Encrypt)
       - caddy-config:/config
     networks:
@@ -143,7 +151,7 @@ services:
 networks:
   # Rede de dados: apenas postgres e api.
   data:
-  # Rede de borda: proxy, api e web.
+  # Rede de borda: proxy, api e web-app.
   edge:
 
 volumes:

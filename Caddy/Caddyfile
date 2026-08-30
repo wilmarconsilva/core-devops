@@ -42,7 +42,7 @@
 	import hardening
 	header X-Frame-Options "SAMEORIGIN"
 
-	reverse_proxy web:8080
+	reverse_proxy web-app:8080
 
 	encode zstd gzip
 	log {
@@ -65,7 +65,7 @@
 #         reverse_proxy api:8080
 #     }
 #     handle {
-#         reverse_proxy web:8080
+#         reverse_proxy web-app:8080
 #     }
 #     encode zstd gzip
 # }

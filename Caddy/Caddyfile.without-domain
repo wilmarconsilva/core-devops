@@ -1,0 +1,32 @@
+# Proxy para rodar SEM domínio (teste local ou VPS provisório, sem TLS).
+# Usado junto com docker-compose.without-domain.yml — ver README, seção "Rodando sem domínio".
+#
+# Sem domínio não há como o Caddy emitir certificado (Let's Encrypt exige DNS público),
+# então aqui tudo entra em HTTP puro, em um único endereço (":80"), roteado por caminho:
+#   /        -> web-app
+#   /api/*   -> api
+
+(without-domain-hardening) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+:80 {
+	import without-domain-hardening
+
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+	handle {
+		reverse_proxy web-app:8080
+	}
+
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+}

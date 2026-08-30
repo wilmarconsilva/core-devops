@@ -9,7 +9,7 @@ O `docker-compose.yml` referencia os repositórios como irmãos:
 Core/
 ├── core-back-end/     # API .NET      (Docker/Dockerfile.Web.Service.REST)
 ├── core-front-end/    # PWA Expo Web  (Docker/Dockerfile.Web)
-└── core-deploy/       # este diretório (compose, Caddyfile, .env, backup)
+└── core-deploy/       # este diretório (compose, Caddy/, .env, backup)
 ```
 
 ---
@@ -23,10 +23,10 @@ Core/
               │  proxy (Caddy)  │  TLS automático (Let's Encrypt)
               └───┬─────────┬───┘
        app.dominio│         │api.dominio
-              ┌───▼───┐ ┌───▼────┐
-              │  web  │ │  api   │  (rede "edge")
-              │ nginx │ │ Kestrel│
-              └───────┘ └───┬────┘
+              ┌────▼────┐ ┌───▼────┐
+              │ web-app │ │  api   │  (rede "edge")
+              │  nginx  │ │ Kestrel│
+              └─────────┘ └───┬────┘
                             │ (rede "data")
                       ┌─────▼──────┐
                       │  postgres  │  volume nomeado, sem porta publicada
@@ -38,9 +38,9 @@ Decisões e por quê:
 | Decisão | Motivo |
 | --- | --- |
 | **Caddy** como proxy | TLS + renovação automáticos em ~10 linhas de config; envia `X-Forwarded-Proto`, que o `Program.cs` já consome em Production (necessário para o cookie do refresh token sair com `Secure` / `SameSite=None`). |
-| **Dois subdomínios** (`api.` e `app.`) | É a topologia que o código já assume: CORS configurável, `SameSite=None` quando HTTPS, Swagger no host da API. Front e API sobem e escalam de forma independente. A alternativa de domínio único (`/api`) está pronta e comentada no `Caddyfile`. |
+| **Dois subdomínios** (`api.` e `app.`) | É a topologia que o código já assume: CORS configurável, `SameSite=None` quando HTTPS, Swagger no host da API. Front e API sobem e escalam de forma independente. A alternativa de domínio único (`/api`) está pronta e comentada no `Caddy/Caddyfile`. |
 | **Front como estático em nginx** | `expo export -p web` gera site estático; não há motivo para manter Node em runtime. Imagem final pequena e sem superfície de servidor de aplicação. |
-| **Duas redes** (`data` / `edge`) | O proxy e o `web` não têm rota até o banco. O Postgres não publica porta no host. |
+| **Duas redes** (`data` / `edge`) | O proxy e o `web-app` não têm rota até o banco. O Postgres não publica porta no host. |
 | **Migrations no startup da API** | Já é o comportamento do `ApplyMigrationsAsync`. Por isso `depends_on: service_healthy` no Postgres. ⚠️ Não escale a API para mais de 1 réplica sem separar as migrations, ou duas instâncias competem pelo mesmo lock. |
 | **Volume nomeado para `caddy-data`** | Guarda os certificados. Apagar esse volume repetidamente esbarra no *rate limit* do Let's Encrypt (5 duplicatas por semana). |
 
@@ -141,7 +141,7 @@ gunzip -c origem.sql.gz | docker compose exec -T postgres psql -U core -d core
 
 > ⚠️ **A URL da API é embutida no bundle do front em tempo de build**
 > (`EXPO_PUBLIC_WEB_SERVICE_URL`, lido em `Application/Services/HttpClientService.ts`).
-> Trocar de domínio exige `docker compose build web --no-cache && docker compose up -d web`;
+> Trocar de domínio exige `docker compose build web-app --no-cache && docker compose up -d web-app`;
 > reiniciar o container não muda nada.
 
 ---
@@ -192,25 +192,48 @@ docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
 ```
 
 Nesse cenário o `EXPO_PUBLIC_WEB_SERVICE_URL` passa a ser um `--build-arg` do workflow — a imagem
-`core-web` fica atrelada ao ambiente, então publique tags distintas por ambiente
-(ex.: `core-web:prod-<sha>`).
+`core-web-app` fica atrelada ao ambiente, então publique tags distintas por ambiente
+(ex.: `core-web-app:prod-<sha>`).
 
 ---
 
-## 8. Pontos de atenção conhecidos
+## 8. Rodando sem domínio (teste local ou VPS provisório)
 
-1. **Health check do container da API**: `mcr.microsoft.com/dotnet/aspnet:10.0` não traz `curl`/`wget`,
-   por isso o serviço `api` não define `healthcheck`. Para habilitar, acrescente na etapa final do
-   `Dockerfile.Web.Service.REST`, antes do `USER app`:
-   `RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*`
-   e no compose: `test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]`.
-2. **`PORT` é obrigatório**: o `ENTRYPOINT` da imagem da API veio do Render (`--urls http://0.0.0.0:${PORT}`).
+Sem domínio o Caddy não consegue emitir certificado (Let's Encrypt exige DNS público) e o CORS
+fixo em `https://${WEB_DOMAIN}` não se aplica. Para isso existe o overlay `docker-compose.without-domain.yml`:
+ele troca o Caddyfile por `Caddy/Caddyfile.without-domain` (HTTP puro, um único endereço `:80`, roteado por
+caminho — `/` vai para o `web-app`, `/api/*` vai para o `api`) e ajusta CORS/URL da API de acordo.
+
+```bash
+cp .env.example .env
+# preencha ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY (openssl rand ...);
+# API_DOMAIN/WEB_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
+
+docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
+```
+
+- **Teste local (sua máquina)**: acesse `http://localhost/` (web-app) e `http://localhost/api/health`.
+  Não precisa mexer em `PUBLIC_HOST`.
+- **VPS sem domínio ainda**: antes do `--build`, defina no `.env` `PUBLIC_HOST=<IP público do VPS>`
+  — é isso que faz o front embutir a URL correta da API e o CORS liberar essa origem. Acesse
+  `http://<IP>/`.
+
+Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, preencha
+`API_DOMAIN`/`WEB_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
+(`docker compose up -d --build`, como na seção 5) para voltar a usar TLS automático.
+
+> ⚠️ Assim como no fluxo com domínio, trocar `PUBLIC_HOST` depois de já ter buildado exige
+> `docker compose -f docker-compose.yml -f docker-compose.without-domain.yml build web-app --no-cache` — a URL
+> da API é embutida no bundle em tempo de build, reiniciar o container não muda nada.
+
+---
+
+## 9. Pontos de atenção conhecidos
+
+1. **`PORT` é obrigatório**: o `ENTRYPOINT` da imagem da API veio do Render (`--urls http://0.0.0.0:${PORT}`).
    O compose define `PORT=8080`; sem isso o Kestrel não sobe.
-3. **`core-back-end/Docker/.dockerignore` não é lido pelo Docker** — vale o `.dockerignore` na raiz do
-   contexto (criado neste ajuste) ou `Docker/Dockerfile.Web.Service.REST.dockerignore`. Sem o da raiz, o
-   contexto de build incluía `Presentation/Web/Application/node_modules` (centenas de MB por build).
-4. **Log em arquivo em Production**: o Serilog escreve em `Logs/*.txt` dentro do container (efêmero).
+2. **Log em arquivo em Production**: o Serilog escreve em `Logs/*.txt` dentro do container (efêmero).
    Foi adicionado o sink de Console para que `docker logs` funcione; para retenção durável, prefira um
    agregador (Loki/Seq) a um volume de arquivo.
-5. **Monitoramento externo**: aponte um uptime monitor (UptimeRobot, BetterStack) para
+3. **Monitoramento externo**: aponte um uptime monitor (UptimeRobot, BetterStack) para
    `https://api.../health` e `https://app.../`. O VPS não avisa quando cai.
