@@ -59,15 +59,22 @@
 # As rotas dos controllers NÃO têm prefixo /api (ex.: /budgets, /authentication),
 # por isso o handle_path remove o prefixo antes de repassar.
 #
-# ⚠️ AO HABILITAR ISTO, defina também no serviço "api" do compose:
-#
-#     Jwt__RefreshTokenCookiePath: "/api/authentication"
+# ⚠️ ESTA ALTERNATIVA QUEBRA O COOKIE DO REFRESH TOKEN, e não há configuração pronta para isso.
 #
 # O handle_path remove o prefixo só na ida. A API responde Set-Cookie com o caminho que ELA
 # enxerga (/authentication), mas o navegador casa o cookie contra o caminho que ELE conhece
-# (/api/authentication/refresh). Sem o ajuste, o cookie do refresh nunca volta e a sessão cai a
-# cada F5 — mesmo com a API saudável, e mesmo aqui, sobre HTTPS: o casamento de Path é textual e
-# independe do esquema. Ver docker-compose.without-domain.yml, que já convive com isso.
+# (/api/authentication/refresh). Como o RFC 6265 exige que o Path seja prefixo do caminho da
+# requisição, o cookie nunca volta e a sessão cai a cada F5 — mesmo com a API saudável.
+#
+# Isso acontece aqui também, sobre HTTPS: o casamento de Path é textual e não olha esquema, host
+# nem porta. Não confunda com Secure/SameSite=None, que aí sim dependem de HTTPS — aquilo decide
+# QUEM pode enviar o cookie, este decide PARA ONDE ele é enviado.
+#
+# Para habilitar, é preciso alterar no back-end:
+#     AuthenticationController.cs -> private const string RefreshTokenCookiePath = "/api/authentication";
+#
+# Foi por essa armadilha que o modo sem domínio abandonou o roteamento por caminho e passou a
+# separar as aplicações por porta — ver Caddy/Caddyfile.without-domain.
 #
 # Pela mesma razão, revise Location de redirect e qualquer URL absoluta em corpo de resposta:
 # todos voltam sem o /api.

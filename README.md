@@ -201,8 +201,9 @@ Nesse cenário o `EXPO_PUBLIC_WEB_SERVICE_URL` passa a ser um `--build-arg` do w
 
 Sem domínio o Caddy não consegue emitir certificado (Let's Encrypt exige DNS público) e o CORS
 fixo em `https://${WEB_DOMAIN}` não se aplica. Para isso existe o overlay `docker-compose.without-domain.yml`:
-ele troca o Caddyfile por `Caddy/Caddyfile.without-domain` (HTTP puro, um único endereço `:80`, roteado por
-caminho — `/` vai para o `web-app`, `/api/*` vai para o `api`) e ajusta CORS/URL da API de acordo.
+ele troca o Caddyfile por `Caddy/Caddyfile.without-domain` (HTTP puro, cada aplicação numa porta do
+mesmo host — `:80` vai para o `web-app`, `:8080` vai para o `api`) e ajusta CORS/URL da API de acordo.
+Como no compose base, **só o proxy publica portas**; `api` e `web-app` continuam apenas com `expose`.
 
 ```bash
 cp .env.example .env
@@ -212,11 +213,18 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
 ```
 
-- **Teste local (sua máquina)**: acesse `http://localhost/` (web-app) e `http://localhost/api/health`.
-  Não precisa mexer em `PUBLIC_HOST`.
+- **Teste local (sua máquina)**: acesse `http://localhost/` (web-app) e `http://localhost:8080/health`
+  (api). Não precisa mexer em `PUBLIC_HOST`.
 - **VPS sem domínio ainda**: antes do `--build`, defina no `.env` `PUBLIC_HOST=<IP público do VPS>`
   — é isso que faz o front embutir a URL correta da API e o CORS liberar essa origem. Acesse
-  `http://<IP>/`.
+  `http://<IP>/`, e libere a porta da API no firewall (`sudo ufw allow 8080/tcp`).
+
+A porta da API é configurável por `API_PORT` no `.env` (padrão 8080) — a mesma variável alimenta o
+bloco do Caddy, a publicação de porta do proxy e a URL embutida no front, então não há como
+divergirem. **A porta do web é fixa na 80** de propósito: o navegador omite a porta padrão no
+header `Origin`, então `Cors__Origins__0` pode ser apenas `http://HOST`. Se o web saísse da 80, a
+origem passaria a carregar a porta — e `http://HOST:80` **não** casa com o `http://HOST` que o
+navegador envia.
 
 Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, preencha
 `API_DOMAIN`/`WEB_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
@@ -226,35 +234,36 @@ Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, 
 > `docker compose -f docker-compose.yml -f docker-compose.without-domain.yml build web-app --no-cache` — a URL
 > da API é embutida no bundle em tempo de build, reiniciar o container não muda nada.
 
-### A armadilha do prefixo `/api`
+### Por que porta, e não caminho único (`/api/*`)
 
-O `handle_path /api/*` do `Caddy/Caddyfile.without-domain` remove o prefixo **só na ida**: a API
-recebe `/authentication/refresh`, enquanto o navegador continua enxergando
-`/api/authentication/refresh`. Requisições atravessam bem, mas **qualquer caminho que o servidor
-devolva volta sem o `/api`** e deixa de casar do lado do cliente.
+Esta é a decisão de projeto do modo sem domínio, e ela existe por um motivo concreto.
 
-O caso concreto é o cookie do refresh token. Por isso o overlay define:
+A primeira versão servia tudo em `:80` e roteava por caminho, com `handle_path /api/*`. Só que o
+`handle_path` remove o prefixo **na ida**: a API recebe `/authentication/refresh`, enquanto o
+navegador continua enxergando `/api/authentication/refresh`. Requisições atravessam bem, mas
+**qualquer caminho que o servidor devolva volta sem o `/api`** e deixa de casar do lado do cliente.
+O caso concreto foi o cookie do refresh token: guardado sob `/authentication`, nunca enviado para
+`/api/authentication/refresh` (RFC 6265 casa cookie por prefixo de caminho), e a sessão caindo a
+cada F5 **mesmo com a API perfeitamente saudável**.
 
-```yaml
-Jwt__RefreshTokenCookiePath: "/api/authentication"
-```
+Separar por porta elimina a causa em vez de compensá-la — o caminho que a API enxerga volta a ser o
+mesmo que o navegador vê. E funciona porque **porta não entra nem no escopo de cookie nem no
+cálculo de *site***:
 
-Sem essa linha o navegador guarda o cookie sob `/authentication`, nunca o envia para
-`/api/authentication/refresh` (RFC 6265 casa cookie por prefixo de caminho) e a sessão cai a cada
-F5 — **mesmo com a API perfeitamente saudável**. No compose base, com dois subdomínios e sem
-prefixo, o default `/authentication` do `JwtOptions` continua valendo e nada precisa ser definido.
+- o cookie posto por `HOST:8080` é guardado para o host `HOST` e reenviado para `HOST:8080`;
+- `http://HOST` → `http://HOST:8080` é **same-site**, então o `SameSite=Lax` do modo HTTP é enviado
+  inclusive em `POST`, que é o método do refresh.
 
-> O gatilho é a reescrita de prefixo, **não** a ausência de TLS — o casamento de `Path` é textual e
-> não olha esquema, host nem porta. Se um dia você habilitar a alternativa de domínio único
-> comentada no `Caddy/Caddyfile`, vai precisar da mesma variável lá, sobre HTTPS. O que o base tem
-> de diferente é servir cada app na raiz do seu próprio subdomínio.
+O preço é o CORS voltar a existir, e isso é um ganho: em produção o front e a API também ficam em
+origens distintas, então o modo por portas exercita o CORS que o roteamento por caminho mascarava.
+
+> O gatilho daquele bug era a **reescrita de prefixo**, não a ausência de TLS — o casamento de
+> `Path` é textual e não olha esquema, host nem porta. A alternativa de domínio único comentada no
+> `Caddy/Caddyfile` tem exatamente o mesmo problema, sobre HTTPS; o aviso está lá.
 >
 > Não confunda com o outro efeito do HTTP em `AuthenticationController.cs`: `Secure` e
 > `SameSite=None` só saem quando a requisição chega por HTTPS. Esse decide **quem** pode enviar o
 > cookie (origem cross-site); o `Path` decide **para onde** ele é enviado. São independentes.
-
-Se você adicionar outra rota com prefixo aqui, verifique também `Location` de redirect e qualquer
-URL absoluta em corpo de resposta — têm o mesmo problema.
 
 ---
 

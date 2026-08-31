@@ -1,10 +1,29 @@
 # Proxy para rodar SEM domínio (teste local ou VPS provisório, sem TLS).
 # Usado junto com docker-compose.without-domain.yml — ver README, seção "Rodando sem domínio".
 #
-# Sem domínio não há como o Caddy emitir certificado (Let's Encrypt exige DNS público),
-# então aqui tudo entra em HTTP puro, em um único endereço (":80"), roteado por caminho:
-#   /        -> web-app
-#   /api/*   -> api
+# Sem domínio não há como o Caddy emitir certificado (Let's Encrypt exige DNS público), então
+# aqui tudo entra em HTTP puro. Cada aplicação responde em UMA PORTA do mesmo host:
+#   :80              -> web-app
+#   :{$API_PORT}     -> api        (8080 por padrão)
+#
+# POR QUE POR PORTA, E NÃO POR CAMINHO (/api/*):
+# A abordagem anterior usava handle_path /api/*, que remove o prefixo só na ida. A API respondia
+# Set-Cookie com o caminho que ELA enxerga (/authentication), enquanto o navegador casava o cookie
+# contra o caminho que ELE conhece (/api/authentication/refresh). Como não casa (RFC 6265 exige que
+# o Path seja prefixo do caminho da requisição), o cookie do refresh nunca voltava e a sessão caía
+# a cada F5 — mesmo com a API saudável.
+#
+# Separar por porta elimina a causa: sem reescrita, o caminho que a API enxerga é o mesmo que o
+# navegador vê, e o Path=/authentication padrão volta a funcionar sem nenhum ajuste. Porta não
+# entra no escopo de cookie nem no cálculo de "site", então:
+#   - o cookie posto por HOST:8080 é reenviado para HOST:8080;
+#   - http://HOST -> http://HOST:8080 é same-site, e o SameSite=Lax do modo HTTP é enviado
+#     inclusive em POST, que é o método do refresh.
+#
+# O preço é o CORS voltar a existir (portas diferentes = origens diferentes), o que na verdade é
+# um ganho de fidelidade: em produção o front e a API também ficam em origens distintas.
+#
+# NÃO "simplifique" isto de volta para caminho único sem reler o parágrafo acima.
 
 (without-domain-hardening) {
 	header {
@@ -14,15 +33,31 @@
 	}
 }
 
+# ============================================
+# Aplicação Web (PWA)
+# ============================================
+# A porta 80 é fixa de propósito: o navegador omite a porta padrão no header Origin, então o
+# Cors__Origins__0 do compose pode ser apenas "http://HOST". Mover o web para outra porta exigiria
+# incluí-la ali — e "http://HOST:80" NÃO casa com o "http://HOST" que o navegador envia.
 :80 {
 	import without-domain-hardening
 
-	handle_path /api/* {
-		reverse_proxy api:8080
+	reverse_proxy web-app:8080
+
+	encode zstd gzip
+	log {
+		output stdout
+		format console
 	}
-	handle {
-		reverse_proxy web-app:8080
-	}
+}
+
+# ============================================
+# API REST
+# ============================================
+:{$API_PORT:8080} {
+	import without-domain-hardening
+
+	reverse_proxy api:8080
 
 	encode zstd gzip
 	log {
