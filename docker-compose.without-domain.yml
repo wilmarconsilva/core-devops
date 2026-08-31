@@ -19,6 +19,19 @@ services:
     environment:
       Cors__Origins__0: "http://${PUBLIC_HOST:-localhost}"
 
+      # O handle_path do Caddy remove o "/api" só na ida: a API enxerga /authentication/refresh,
+      # mas o navegador continua vendo /api/authentication/refresh. Como o cookie é casado pelo
+      # caminho que o NAVEGADOR conhece (RFC 6265: o Path precisa ser prefixo do caminho da
+      # requisição), o path precisa incluir o prefixo — sem isso o cookie do refresh nunca é
+      # enviado de volta e a sessão cai a cada F5, mesmo com a API saudável.
+      #
+      # O gatilho é a REESCRITA DE PREFIXO, não a ausência de TLS: o casamento de Path é textual,
+      # e esquema/host/porta não entram nessa conta. O compose base dispensa esta variável porque
+      # serve cada app na raiz do seu próprio subdomínio, e não porque usa HTTPS — se você migrar
+      # o base para a alternativa de domínio único comentada no Caddy/Caddyfile, vai precisar
+      # desta mesma linha lá, com TLS e tudo.
+      Jwt__RefreshTokenCookiePath: "/api/authentication"
+
   web-app:
     build:
       args:

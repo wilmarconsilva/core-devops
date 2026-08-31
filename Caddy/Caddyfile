@@ -59,6 +59,19 @@
 # As rotas dos controllers NÃO têm prefixo /api (ex.: /budgets, /authentication),
 # por isso o handle_path remove o prefixo antes de repassar.
 #
+# ⚠️ AO HABILITAR ISTO, defina também no serviço "api" do compose:
+#
+#     Jwt__RefreshTokenCookiePath: "/api/authentication"
+#
+# O handle_path remove o prefixo só na ida. A API responde Set-Cookie com o caminho que ELA
+# enxerga (/authentication), mas o navegador casa o cookie contra o caminho que ELE conhece
+# (/api/authentication/refresh). Sem o ajuste, o cookie do refresh nunca volta e a sessão cai a
+# cada F5 — mesmo com a API saudável, e mesmo aqui, sobre HTTPS: o casamento de Path é textual e
+# independe do esquema. Ver docker-compose.without-domain.yml, que já convive com isso.
+#
+# Pela mesma razão, revise Location de redirect e qualquer URL absoluta em corpo de resposta:
+# todos voltam sem o /api.
+#
 # {$WEB_DOMAIN} {
 #     import hardening
 #     handle_path /api/* {

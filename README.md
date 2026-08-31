@@ -226,6 +226,36 @@ Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, 
 > `docker compose -f docker-compose.yml -f docker-compose.without-domain.yml build web-app --no-cache` — a URL
 > da API é embutida no bundle em tempo de build, reiniciar o container não muda nada.
 
+### A armadilha do prefixo `/api`
+
+O `handle_path /api/*` do `Caddy/Caddyfile.without-domain` remove o prefixo **só na ida**: a API
+recebe `/authentication/refresh`, enquanto o navegador continua enxergando
+`/api/authentication/refresh`. Requisições atravessam bem, mas **qualquer caminho que o servidor
+devolva volta sem o `/api`** e deixa de casar do lado do cliente.
+
+O caso concreto é o cookie do refresh token. Por isso o overlay define:
+
+```yaml
+Jwt__RefreshTokenCookiePath: "/api/authentication"
+```
+
+Sem essa linha o navegador guarda o cookie sob `/authentication`, nunca o envia para
+`/api/authentication/refresh` (RFC 6265 casa cookie por prefixo de caminho) e a sessão cai a cada
+F5 — **mesmo com a API perfeitamente saudável**. No compose base, com dois subdomínios e sem
+prefixo, o default `/authentication` do `JwtOptions` continua valendo e nada precisa ser definido.
+
+> O gatilho é a reescrita de prefixo, **não** a ausência de TLS — o casamento de `Path` é textual e
+> não olha esquema, host nem porta. Se um dia você habilitar a alternativa de domínio único
+> comentada no `Caddy/Caddyfile`, vai precisar da mesma variável lá, sobre HTTPS. O que o base tem
+> de diferente é servir cada app na raiz do seu próprio subdomínio.
+>
+> Não confunda com o outro efeito do HTTP em `AuthenticationController.cs`: `Secure` e
+> `SameSite=None` só saem quando a requisição chega por HTTPS. Esse decide **quem** pode enviar o
+> cookie (origem cross-site); o `Path` decide **para onde** ele é enviado. São independentes.
+
+Se você adicionar outra rota com prefixo aqui, verifique também `Location` de redirect e qualquer
+URL absoluta em corpo de resposta — têm o mesmo problema.
+
 ---
 
 ## 9. Pontos de atenção conhecidos
