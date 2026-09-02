@@ -26,7 +26,7 @@
 	# X-Forwarded-Proto/For são repassados pelo Caddy e lidos pelo UseForwardedHeaders
 	# em Production — é o que faz Request.IsHttps ser true e o cookie do refresh token
 	# receber Secure=true; SameSite=None.
-	reverse_proxy api:8080
+	reverse_proxy web-service-rest:8080
 
 	encode zstd gzip
 	log {
@@ -82,7 +82,7 @@
 # {$WEB_DOMAIN} {
 #     import hardening
 #     handle_path /api/* {
-#         reverse_proxy api:8080
+#         reverse_proxy web-service-rest:8080
 #     }
 #     handle {
 #         reverse_proxy web-app:8080

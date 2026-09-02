@@ -16,7 +16,7 @@
 # para o front embutir a URL correta da API e o CORS liberar essa origem. Libere as
 # duas portas no firewall (ufw allow 80/tcp e ufw allow 8080/tcp).
 services:
-  api:
+  web-service-rest:
     environment:
       # Sem porta de propósito: o navegador omite a porta padrão no header Origin, então uma
       # requisição vinda de http://localhost:80 chega como origem "http://localhost". Escrever

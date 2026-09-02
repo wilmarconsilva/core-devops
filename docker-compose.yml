@@ -47,11 +47,11 @@ services:
   # ============================================
   # API REST (.NET)
   # ============================================
-  api:
+  web-service-rest:
     build:
       context: ../core-back-end
       dockerfile: Docker/Dockerfile.Web.Service.REST
-    image: core-api:local
+    image: core-web-service-rest:local
     restart: unless-stopped
     depends_on:
       postgres:
@@ -128,7 +128,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      api:
+      web-service-rest:
         condition: service_healthy
       web-app:
         condition: service_healthy

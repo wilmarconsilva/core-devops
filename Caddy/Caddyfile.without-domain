@@ -4,7 +4,7 @@
 # Sem domínio não há como o Caddy emitir certificado (Let's Encrypt exige DNS público), então
 # aqui tudo entra em HTTP puro. Cada aplicação responde em UMA PORTA do mesmo host:
 #   :80              -> web-app
-#   :{$API_PORT}     -> api        (8080 por padrão)
+#   :{$API_PORT}     -> web-service-rest        (8080 por padrão)
 #
 # POR QUE POR PORTA, E NÃO POR CAMINHO (/api/*):
 # A abordagem anterior usava handle_path /api/*, que remove o prefixo só na ida. A API respondia
@@ -57,7 +57,7 @@
 :{$API_PORT:8080} {
 	import without-domain-hardening
 
-	reverse_proxy api:8080
+	reverse_proxy web-service-rest:8080
 
 	encode zstd gzip
 	log {
