@@ -121,7 +121,7 @@ openssl rand -base64 48   # -> JWT_SIGNING_KEY
 nano .env                 # domínios, e-mail do ACME, SMTP
 
 docker compose up -d --build
-docker compose logs -f api    # acompanhe "Migrations aplicadas com sucesso."
+docker compose logs -f web-service-rest    # acompanhe "Migrations aplicadas com sucesso."
 ```
 
 Validação:
@@ -155,7 +155,7 @@ cd /opt/core/core-front-end && git pull
 cd /opt/core/core-deploy    && docker compose up -d --build
 
 # Logs (json-file com rotação de 10 MB x 5 já configurada no compose)
-docker compose logs -f api
+docker compose logs -f web-service-rest
 docker compose logs -f proxy
 
 # Status e consumo
