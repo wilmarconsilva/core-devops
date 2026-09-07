@@ -66,13 +66,13 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
 
       Jwt__SigningKey: ${JWT_SIGNING_KEY}
-      Jwt__Issuer: ${JWT_ISSUER:-Core.Api}
+      Jwt__Issuer: ${JWT_ISSUER:-Core.WebService}
       Jwt__Audience: ${JWT_AUDIENCE:-Core.Client}
       Jwt__AccessTokenExpirationMinutes: ${JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:-30}
       Jwt__RefreshTokenExpirationDays: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:-7}
 
       # CORS: arrays em variáveis de ambiente usam índice numérico (Cors:Origins[0]).
-      Cors__Origins__0: "https://${WEB_DOMAIN}"
+      Cors__Origins__0: "https://${WEB_SERVICE_REST_DOMAIN}"
 
       Email__Enabled: ${EMAIL_ENABLED:-false}
       Email__Host: ${EMAIL_HOST:-}
@@ -105,7 +105,7 @@ services:
       args:
         # Variáveis EXPO_PUBLIC_* são embutidas no bundle em tempo de BUILD.
         # Trocar a URL da API exige rebuild da imagem — não basta reiniciar o container.
-        EXPO_PUBLIC_WEB_SERVICE_URL: "https://${API_DOMAIN}"
+        EXPO_PUBLIC_WEB_SERVICE_REST_URL: "https://${WEB_SERVICE_REST_DOMAIN}"
         EXPO_PUBLIC_OPERATION_MODE: ${EXPO_PUBLIC_OPERATION_MODE:-}
     image: core-web-app:local
     restart: unless-stopped
@@ -137,8 +137,8 @@ services:
       - "443:443"
       - "443:443/udp"   # HTTP/3
     environment:
-      API_DOMAIN: ${API_DOMAIN}
-      WEB_DOMAIN: ${WEB_DOMAIN}
+      WEB_SERVICE_REST_DOMAIN: ${WEB_SERVICE_REST_DOMAIN}
+      WEB_APP_DOMAIN: ${WEB_APP_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./Caddy/Caddyfile:/etc/caddy/Caddyfile:ro

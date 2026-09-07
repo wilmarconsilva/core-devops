@@ -7,7 +7,7 @@
 # pede ~2 GB cada). Requer IMAGE_TAG e GHCR_OWNER no .env.
 services:
   web-service-rest:
-    image: ghcr.io/${GHCR_OWNER}/core-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GHCR_OWNER}/core-web-service-rest:${IMAGE_TAG:-latest}
     build: !reset null
 
   web-app:

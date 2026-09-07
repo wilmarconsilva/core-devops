@@ -18,9 +18,9 @@
 }
 
 # ============================================
-# API REST
+# WEB SERVICE REST
 # ============================================
-{$API_DOMAIN} {
+{$WEB_SERVICE_REST_DOMAIN} {
 	import hardening
 
 	# X-Forwarded-Proto/For são repassados pelo Caddy e lidos pelo UseForwardedHeaders
@@ -38,7 +38,7 @@
 # ============================================
 # Aplicação Web (PWA)
 # ============================================
-{$WEB_DOMAIN} {
+{$WEB_APP_DOMAIN} {
 	import hardening
 	header X-Frame-Options "SAMEORIGIN"
 
@@ -79,7 +79,7 @@
 # Pela mesma razão, revise Location de redirect e qualquer URL absoluta em corpo de resposta:
 # todos voltam sem o /api.
 #
-# {$WEB_DOMAIN} {
+# {$WEB_APP_DOMAIN} {
 #     import hardening
 #     handle_path /api/* {
 #         reverse_proxy web-service-rest:8080

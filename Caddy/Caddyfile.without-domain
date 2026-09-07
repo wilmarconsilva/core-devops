@@ -52,9 +52,9 @@
 }
 
 # ============================================
-# API REST
+# WEB SERVICE REST
 # ============================================
-:{$API_PORT:8080} {
+:{$WEB_SERVICE_REST_PORT:8080} {
 	import without-domain-hardening
 
 	reverse_proxy web-service-rest:8080

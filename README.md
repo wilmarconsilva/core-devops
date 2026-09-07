@@ -200,7 +200,7 @@ Nesse cenário o `EXPO_PUBLIC_WEB_SERVICE_URL` passa a ser um `--build-arg` do w
 ## 8. Rodando sem domínio (teste local ou VPS provisório)
 
 Sem domínio o Caddy não consegue emitir certificado (Let's Encrypt exige DNS público) e o CORS
-fixo em `https://${WEB_DOMAIN}` não se aplica. Para isso existe o overlay `docker-compose.without-domain.yml`:
+fixo em `https://${WEB_APP_DOMAIN}` não se aplica. Para isso existe o overlay `docker-compose.without-domain.yml`:
 ele troca o Caddyfile por `Caddy/Caddyfile.without-domain` (HTTP puro, cada aplicação numa porta do
 mesmo host — `:80` vai para o `web-app`, `:8080` vai para o `api`) e ajusta CORS/URL da API de acordo.
 Como no compose base, **só o proxy publica portas**; `api` e `web-app` continuam apenas com `expose`.
@@ -208,7 +208,7 @@ Como no compose base, **só o proxy publica portas**; `api` e `web-app` continua
 ```bash
 cp .env.example .env
 # preencha ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY (openssl rand ...);
-# API_DOMAIN/WEB_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
+# WEB_SERVICE_REST_DOMAIN/WEB_APP_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
 
 docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
 ```
@@ -227,7 +227,7 @@ origem passaria a carregar a porta — e `http://HOST:80` **não** casa com o `h
 navegador envia.
 
 Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, preencha
-`API_DOMAIN`/`WEB_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
+`WEB_SERVICE_REST_DOMAIN`/`WEB_APP_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
 (`docker compose up -d --build`, como na seção 5) para voltar a usar TLS automático.
 
 > ⚠️ Assim como no fluxo com domínio, trocar `PUBLIC_HOST` depois de já ter buildado exige
