@@ -6,10 +6,10 @@
 # Vantagem: o VPS não precisa de SDK .NET/Node nem de RAM para build (build de .NET + Expo
 # pede ~2 GB cada). Requer IMAGE_TAG e GHCR_OWNER no .env.
 services:
-  api:
-    image: ghcr.io/${GHCR_OWNER}/core-api:${IMAGE_TAG:-latest}
+  web-service-rest:
+    image: ghcr.io/${GHCR_OWNER}/core-web-service-rest:${IMAGE_TAG:-latest}
     build: !reset null
 
-  web:
-    image: ghcr.io/${GHCR_OWNER}/core-web:${IMAGE_TAG:-latest}
+  web-app:
+    image: ghcr.io/${GHCR_OWNER}/core-web-app:${IMAGE_TAG:-latest}
     build: !reset null

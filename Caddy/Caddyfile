@@ -18,15 +18,15 @@
 }
 
 # ============================================
-# API REST
+# WEB SERVICE REST
 # ============================================
-{$API_DOMAIN} {
+{$WEB_SERVICE_REST_DOMAIN} {
 	import hardening
 
 	# X-Forwarded-Proto/For são repassados pelo Caddy e lidos pelo UseForwardedHeaders
 	# em Production — é o que faz Request.IsHttps ser true e o cookie do refresh token
 	# receber Secure=true; SameSite=None.
-	reverse_proxy api:8080
+	reverse_proxy web-service-rest:8080
 
 	encode zstd gzip
 	log {
@@ -38,11 +38,11 @@
 # ============================================
 # Aplicação Web (PWA)
 # ============================================
-{$WEB_DOMAIN} {
+{$WEB_APP_DOMAIN} {
 	import hardening
 	header X-Frame-Options "SAMEORIGIN"
 
-	reverse_proxy web:8080
+	reverse_proxy web-app:8080
 
 	encode zstd gzip
 	log {
@@ -59,13 +59,33 @@
 # As rotas dos controllers NÃO têm prefixo /api (ex.: /budgets, /authentication),
 # por isso o handle_path remove o prefixo antes de repassar.
 #
-# {$WEB_DOMAIN} {
+# ⚠️ ESTA ALTERNATIVA QUEBRA O COOKIE DO REFRESH TOKEN, e não há configuração pronta para isso.
+#
+# O handle_path remove o prefixo só na ida. A API responde Set-Cookie com o caminho que ELA
+# enxerga (/authentication), mas o navegador casa o cookie contra o caminho que ELE conhece
+# (/api/authentication/refresh). Como o RFC 6265 exige que o Path seja prefixo do caminho da
+# requisição, o cookie nunca volta e a sessão cai a cada F5 — mesmo com a API saudável.
+#
+# Isso acontece aqui também, sobre HTTPS: o casamento de Path é textual e não olha esquema, host
+# nem porta. Não confunda com Secure/SameSite=None, que aí sim dependem de HTTPS — aquilo decide
+# QUEM pode enviar o cookie, este decide PARA ONDE ele é enviado.
+#
+# Para habilitar, é preciso alterar no back-end:
+#     AuthenticationController.cs -> private const string RefreshTokenCookiePath = "/api/authentication";
+#
+# Foi por essa armadilha que o modo sem domínio abandonou o roteamento por caminho e passou a
+# separar as aplicações por porta — ver Caddy/Caddyfile.without-domain.
+#
+# Pela mesma razão, revise Location de redirect e qualquer URL absoluta em corpo de resposta:
+# todos voltam sem o /api.
+#
+# {$WEB_APP_DOMAIN} {
 #     import hardening
 #     handle_path /api/* {
-#         reverse_proxy api:8080
+#         reverse_proxy web-service-rest:8080
 #     }
 #     handle {
-#         reverse_proxy web:8080
+#         reverse_proxy web-app:8080
 #     }
 #     encode zstd gzip
 # }

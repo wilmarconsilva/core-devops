@@ -1,0 +1,43 @@
+# Overlay para subir SEM domínio: teste local na sua máquina, ou VPS provisório
+# ainda sem DNS configurado. Sem TLS — tudo em HTTP, cada aplicação numa porta do
+# mesmo host (ver Caddy/Caddyfile.without-domain).
+#
+# Uso:
+#   cp .env.example .env
+#   # ajuste ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY; WEB_SERVICE_REST_DOMAIN/WEB_APP_DOMAIN
+#   # podem ficar com o valor de exemplo, não são usados neste overlay.
+#   docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
+#
+# Acesso:
+#   http://localhost/        (web)   — ou http://PUBLIC_HOST/ se definido no .env
+#   http://localhost:8080/   (api)   — ou a porta definida em API_PORT
+#
+# Deploy em VPS sem domínio: defina PUBLIC_HOST=<IP do VPS> no .env antes do build,
+# para o front embutir a URL correta da API e o CORS liberar essa origem. Libere as
+# duas portas no firewall (ufw allow 80/tcp e ufw allow 8080/tcp).
+services:
+  web-service-rest:
+    environment:
+      # Sem porta de propósito: o navegador omite a porta padrão no header Origin, então uma
+      # requisição vinda de http://localhost:80 chega como origem "http://localhost". Escrever
+      # "http://localhost:80" aqui NÃO casaria. É por isso que a porta do web é fixa na 80 e só
+      # a da API é configurável.
+      Cors__Origins__0: "http://${PUBLIC_HOST:-localhost}"
+
+  web-app:
+    build:
+      args:
+        EXPO_PUBLIC_WEB_SERVICE_REST_URL: "http://${PUBLIC_HOST:-localhost}:${WEB_SERVICE_REST_PORT:-8080}"
+
+  proxy:
+    environment:
+      # Lido pelo Caddyfile.without-domain como {$WEB_SERVICE_REST_PORT}.
+      WEB_SERVICE_REST_PORT: ${WEB_SERVICE_REST_PORT:-8080}
+    volumes:
+      - ./Caddy/Caddyfile.without-domain:/etc/caddy/Caddyfile:ro
+    # !override substitui a lista do compose base em vez de anexar a ela. Sem isso, 443 e 443/udp
+    # continuariam publicados sem nada escutando, ocupando as portas do host à toa.
+    # Requer Compose >= 2.24 (mesmo requisito do overlay de registry).
+    ports: !override
+      - "80:80"
+      - "${WEB_SERVICE_REST_PORT:-8080}:${WEB_SERVICE_REST_PORT:-8080}"
