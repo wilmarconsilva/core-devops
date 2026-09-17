@@ -4,7 +4,7 @@
 #
 # Uso:
 #   cp .env.example .env
-#   # ajuste ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY; WEB_SERVICE_REST_DOMAIN/WEB_APP_DOMAIN
+#   # ajuste ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY; WEB_API_REST_DOMAIN/WEB_APP_DOMAIN
 #   # podem ficar com o valor de exemplo, não são usados neste overlay.
 #   docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
 #
@@ -16,7 +16,7 @@
 # para o front embutir a URL correta da API e o CORS liberar essa origem. Libere as
 # duas portas no firewall (ufw allow 80/tcp e ufw allow 8080/tcp).
 services:
-  web-service-rest:
+  web-api-rest:
     environment:
       # Sem porta de propósito: o navegador omite a porta padrão no header Origin, então uma
       # requisição vinda de http://localhost:80 chega como origem "http://localhost". Escrever
@@ -27,12 +27,12 @@ services:
   web-app:
     build:
       args:
-        EXPO_PUBLIC_WEB_SERVICE_REST_URL: "http://${PUBLIC_HOST:-localhost}:${WEB_SERVICE_REST_PORT:-8080}"
+        EXPO_PUBLIC_WEB_API_REST_URL: "http://${PUBLIC_HOST:-localhost}:${WEB_API_REST_PORT:-8080}"
 
   proxy:
     environment:
-      # Lido pelo Caddyfile.without-domain como {$WEB_SERVICE_REST_PORT}.
-      WEB_SERVICE_REST_PORT: ${WEB_SERVICE_REST_PORT:-8080}
+      # Lido pelo Caddyfile.without-domain como {$WEB_API_REST_PORT}.
+      WEB_API_REST_PORT: ${WEB_API_REST_PORT:-8080}
     volumes:
       - ./Caddy/Caddyfile.without-domain:/etc/caddy/Caddyfile:ro
     # !override substitui a lista do compose base em vez de anexar a ela. Sem isso, 443 e 443/udp
@@ -40,4 +40,4 @@ services:
     # Requer Compose >= 2.24 (mesmo requisito do overlay de registry).
     ports: !override
       - "80:80"
-      - "${WEB_SERVICE_REST_PORT:-8080}:${WEB_SERVICE_REST_PORT:-8080}"
+      - "${WEB_API_REST_PORT:-8080}:${WEB_API_REST_PORT:-8080}"

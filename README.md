@@ -7,7 +7,7 @@ O `docker-compose.yml` referencia os repositórios como irmãos:
 
 ```
 Core/
-├── core-back-end/     # API .NET      (Docker/Dockerfile.Web.Service.REST)
+├── core-back-end/     # API .NET      (Docker/Dockerfile.Web.API.REST)
 ├── core-front-end/    # PWA Expo Web  (Docker/Dockerfile.Web)
 └── core-deploy/       # este diretório (compose, Caddy/, .env, backup)
 ```
@@ -121,7 +121,7 @@ openssl rand -base64 48   # -> JWT_SIGNING_KEY
 nano .env                 # domínios, e-mail do ACME, SMTP
 
 docker compose up -d --build
-docker compose logs -f web-service-rest    # acompanhe "Migrations aplicadas com sucesso."
+docker compose logs -f web-api-rest    # acompanhe "Migrations aplicadas com sucesso."
 ```
 
 Validação:
@@ -155,7 +155,7 @@ cd /opt/core/core-front-end && git pull
 cd /opt/core/core-deploy    && docker compose up -d --build
 
 # Logs (json-file com rotação de 10 MB x 5 já configurada no compose)
-docker compose logs -f web-service-rest
+docker compose logs -f web-api-rest
 docker compose logs -f proxy
 
 # Status e consumo
@@ -208,7 +208,7 @@ Como no compose base, **só o proxy publica portas**; `api` e `web-app` continua
 ```bash
 cp .env.example .env
 # preencha ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY (openssl rand ...);
-# WEB_SERVICE_REST_DOMAIN/WEB_APP_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
+# WEB_API_REST_DOMAIN/WEB_APP_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
 
 docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
 ```
@@ -227,7 +227,7 @@ origem passaria a carregar a porta — e `http://HOST:80` **não** casa com o `h
 navegador envia.
 
 Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, preencha
-`WEB_SERVICE_REST_DOMAIN`/`WEB_APP_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
+`WEB_API_REST_DOMAIN`/`WEB_APP_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
 (`docker compose up -d --build`, como na seção 5) para voltar a usar TLS automático.
 
 > ⚠️ Assim como no fluxo com domínio, trocar `PUBLIC_HOST` depois de já ter buildado exige
