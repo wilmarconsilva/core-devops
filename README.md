@@ -3,7 +3,8 @@
 Stack completa: **PostgreSQL + API (.NET 10) + Web (Expo PWA) + Caddy (proxy reverso e TLS automático)**.
 
 Este diretório é o *composition root de infraestrutura*: nenhuma das duas aplicações conhece o deploy da outra.
-O `docker-compose.yml` referencia os repositórios como irmãos:
+O `docker-compose.yml` referencia os repositórios como irmãos (isso vale para o build — na CI ou local;
+no VPS de produção só este diretório é necessário, as imagens vêm do registry):
 
 ```
 Core/
@@ -50,13 +51,14 @@ Decisões e por quê:
 
 | Cenário | Mínimo recomendado |
 | --- | --- |
-| Build **no VPS** (`up --build`) | 2 vCPU / **4 GB RAM** / 40 GB SSD |
-| Build na **CI** + VPS só faz `pull` | 1–2 vCPU / **2 GB RAM** / 20 GB SSD |
+| Produção — VPS só faz `pull` das imagens (§6) | 1–2 vCPU / **2 GB RAM** / 20 GB SSD |
+| Build no próprio host (só no modo sem domínio, §8) | 2 vCPU / **4 GB RAM** / 40 GB SSD |
 
-O build do .NET SDK e o do Expo consomem cerca de 1,5–2 GB de RAM cada. Em VPS de 2 GB sem swap o build
-**é morto pelo OOM killer** — use a opção da CI (§7) ou adicione 2 GB de swap.
+O deploy de produção não compila no VPS (§6), então 2 GB bastam. Já o build do .NET SDK e o do Expo
+consomem cerca de 1,5–2 GB de RAM cada: se você buildar no próprio host, em VPS de 2 GB sem swap o
+build **é morto pelo OOM killer** — adicione 2 GB de swap.
 
-Software: Ubuntu 22.04/24.04 LTS + Docker Engine com Compose v2 (>= 2.24 se usar o overlay de registry).
+Software: Ubuntu 22.04/24.04 LTS + Docker Engine com Compose v2 **>= 2.24** (o overlay de registry usa `!reset`).
 
 ---
 
@@ -79,7 +81,7 @@ sudo ufw enable
 # Atualizações de segurança automáticas
 sudo apt install -y unattended-upgrades fail2ban
 
-# (opcional, VPS de 2 GB) swap para sobreviver ao build
+# (só se for buildar no próprio host) swap para sobreviver ao build
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab
@@ -103,26 +105,99 @@ Se usar Cloudflare, mantenha o proxy **desligado (DNS only)** no primeiro start.
 
 ---
 
-## 5. Primeiro deploy
+## 5. Build e publicação das imagens
+
+As duas imagens vivem no GHCR (GitHub Container Registry), e é delas que o VPS puxa:
+
+| Imagem | Contexto de build | Dockerfile |
+| --- | --- | --- |
+| `ghcr.io/<owner>/core-web-api-rest` | repositório do back-end | `Docker/Dockerfile.Web.API.REST` |
+| `ghcr.io/<owner>/core-web-app` | repositório do front-end | `Docker/Dockerfile` |
+
+`<owner>` é o dono do pacote no GitHub (o mesmo valor de `GHCR_OWNER` no `.env`) e **tem que estar
+em minúsculas** — o GHCR rejeita maiúsculas no caminho da imagem. A tag é o que o VPS escolhe em
+`IMAGE_TAG`.
+
+Token: um PAT *classic* com escopo **`write:packages`** para publicar (e `read:packages`, que basta
+no VPS). No GitHub Actions não precisa de PAT — o `GITHUB_TOKEN` do próprio job serve, desde que o
+workflow declare `permissions: packages: write`.
+
+> ⚠️ **A URL da API é embutida no bundle do front em tempo de build**, então ela é um `--build-arg`
+> (`EXPO_PUBLIC_WEB_API_REST_URL`) e **não** uma variável de runtime: a imagem `core-web-app` fica
+> atrelada ao ambiente. Publique tags distintas por ambiente (ex.: `core-web-app:prod-<sha>`) e nunca
+> reaproveite a imagem de staging em produção.
+
+### 5.1 Na máquina local via terminal
+
+Rode a partir do diretório que contém os três
+repositórios (`Core/`):
+
+```bash
+export GHCR_OWNER=wilmarconsilva     # minúsculas
+export IMAGE_TAG=0.0.0
+echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_OWNER --password-stdin
+
+# API
+docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest:1.1.0 -t ghcr.io/$GHCR_OWNER/core-web-api-rest:latest ../core-back-end
+
+# Web — a URL da API é embutida agora, no build
+docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile --build-arg EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br -t ghcr.io/$GHCR_OWNER/core-web-app:1.1.0 -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
+
+docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest
+docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app
+```
+
+`--platform linux/amd64` não é opcional em Mac Apple Silicon ou em qualquer host ARM: sem ele a
+imagem sai `arm64` e o VPS (x86) recusa com `exec format error`. Em host x86 o parâmetro é inócuo.
+
+Conferir o que foi publicado:
+
+```bash
+docker buildx imagetools inspect ghcr.io/$GHCR_OWNER/core-web-api-rest:$IMAGE_TAG
+```
+
+### 5.2 Visibilidade do pacote
+
+O primeiro push cria o pacote como **privado** — por isso o `docker login` no VPS (§6). Para
+dispensar o login lá, abra o pacote em `github.com/users/<owner>/packages` → *Package settings* →
+*Change visibility* → **Public**. Vale também vincular o pacote ao repositório na mesma tela, que é
+o que faz a aba *Packages* aparecer no repo.
+
+---
+
+## 6. Deploy (imagens do registry)
+
+O VPS **não compila**: com as imagens já publicadas (#5), ele apenas puxa e sobe. Isso mantém o
+deploy independente do estado da máquina e da RAM disponível — o build do .NET SDK e o do Expo
+consomem cerca de 1,5–2 GB de RAM cada.
 
 ```bash
 sudo mkdir -p /opt/core && sudo chown deploy:deploy /opt/core
 su - deploy
 cd /opt/core
 
-git clone https://github.com/<owner>/core-back-end.git
-git clone https://github.com/wilmarconsilva/core-front-end.git
 git clone https://github.com/<owner>/core-deploy.git    # ou copie este diretório
-
 cd core-deploy
+
 cp .env.example .env
 openssl rand -base64 32   # -> POSTGRES_PASSWORD
 openssl rand -base64 48   # -> JWT_SIGNING_KEY
-nano .env                 # domínios, e-mail do ACME, SMTP
+nano .env                 # domínios, e-mail do ACME, SMTP, GHCR_OWNER, IMAGE_TAG
 
-docker compose up -d --build
-docker compose logs -f web-api-rest    # acompanhe "Migrations aplicadas com sucesso."
+# GHCR: um token com escopo read:packages basta para puxar
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <usuario> --password-stdin
+
+# o overlay do registry entra em todo comando da stack — um alias encurta
+alias dc='docker compose -f docker-compose.yml -f docker-compose.registry.yml'
+
+dc pull
+dc up -d
+dc logs -f web-api-rest    # acompanhe "Migrations aplicadas com sucesso."
 ```
+
+O overlay `docker-compose.registry.yml` troca o `build` pelas imagens
+`ghcr.io/${GHCR_OWNER}/core-web-api-rest` e `.../core-web-app` na tag de `IMAGE_TAG` (padrão
+`latest`). Os repositórios das aplicações **não** precisam ser clonados no VPS — só este diretório.
 
 Validação:
 
@@ -136,64 +211,47 @@ igual ou superior à do banco de origem e restaure antes de expor a aplicação:
 
 ```bash
 pg_dump "<connection-string-de-origem>" --format=plain --no-owner | gzip -9 > origem.sql.gz
-gunzip -c origem.sql.gz | docker compose exec -T postgres psql -U core -d core
+gunzip -c origem.sql.gz | dc exec -T postgres psql -U core -d core
 ```
 
-> ⚠️ **A URL da API é embutida no bundle do front em tempo de build**
-> (`EXPO_PUBLIC_WEB_SERVICE_URL`, lido em `Application/Services/HttpClientService.ts`).
-> Trocar de domínio exige `docker compose build web-app --no-cache && docker compose up -d web-app`;
-> reiniciar o container não muda nada.
+> ⚠️ Trocar de domínio **não** é operação de deploy: a URL da API está embutida no bundle do front
+> (`EXPO_PUBLIC_WEB_API_REST_URL`, lido em `Application/Services/HttpClientService.ts`), fixada no
+> build da imagem — é preciso publicar uma imagem nova (§5). Puxar a mesma tag e reiniciar o
+> container não muda nada.
 
 ---
 
-## 6. Operação
+## 7. Operação
+
+Com o `dc` da §6 no shell (`alias dc='docker compose -f docker-compose.yml -f docker-compose.registry.yml'`):
 
 ```bash
-# Atualizar após um merge na main
-cd /opt/core/core-back-end  && git pull
-cd /opt/core/core-front-end && git pull
-cd /opt/core/core-deploy    && docker compose up -d --build
+# Atualizar para uma versão nova publicada pela CI
+cd /opt/core/core-deploy
+nano .env        # IMAGE_TAG=<nova tag>, ou mantenha "latest"
+dc pull && dc up -d
 
 # Logs (json-file com rotação de 10 MB x 5 já configurada no compose)
-docker compose logs -f web-api-rest
-docker compose logs -f proxy
+dc logs -f web-api-rest
+dc logs -f proxy
 
 # Status e consumo
-docker compose ps
+dc ps
 docker stats --no-stream
 
 # Acessar o banco (nunca exponha a porta 5432 na internet)
-docker compose exec postgres psql -U core -d core
+dc exec postgres psql -U core -d core
 
 # Backup diário
 ./scripts/backup-db.sh
 crontab -e   # 0 3 * * * cd /opt/core/core-deploy && ./scripts/backup-db.sh >> /var/log/core-backup.log 2>&1
 
 # Restore
-gunzip -c backups/core-20260101T030000Z.sql.gz | docker compose exec -T postgres psql -U core -d core
+gunzip -c backups/core-20260101T030000Z.sql.gz | dc exec -T postgres psql -U core -d core
 
 # Limpeza de imagens antigas (evita encher o disco)
 docker image prune -af --filter "until=168h"
 ```
-
----
-
-## 7. Evolução recomendada: build na CI, VPS só publica
-
-Compilar no servidor de produção é o maior risco desta configuração: consome a RAM que a aplicação
-está usando e deixa o deploy sujeito ao estado da máquina. O caminho natural é build no GitHub
-Actions, publicação no GHCR e `pull` no VPS:
-
-```bash
-# no VPS, depois de configurar GHCR_OWNER e IMAGE_TAG no .env
-echo "$GHCR_TOKEN" | docker login ghcr.io -u <usuario> --password-stdin
-docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
-docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
-```
-
-Nesse cenário o `EXPO_PUBLIC_WEB_SERVICE_URL` passa a ser um `--build-arg` do workflow — a imagem
-`core-web-app` fica atrelada ao ambiente, então publique tags distintas por ambiente
-(ex.: `core-web-app:prod-<sha>`).
 
 ---
 
@@ -227,8 +285,9 @@ origem passaria a carregar a porta — e `http://HOST:80` **não** casa com o `h
 navegador envia.
 
 Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, preencha
-`WEB_API_REST_DOMAIN`/`WEB_APP_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem** o overlay
-(`docker compose up -d --build`, como na seção 5) para voltar a usar TLS automático.
+`WEB_API_REST_DOMAIN`/`WEB_APP_DOMAIN`/`ACME_EMAIL` de verdade e suba de novo **sem o overlay `without-domain`**
+(`docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d`, como na §6) para
+voltar a usar TLS automático.
 
 > ⚠️ Assim como no fluxo com domínio, trocar `PUBLIC_HOST` depois de já ter buildado exige
 > `docker compose -f docker-compose.yml -f docker-compose.without-domain.yml build web-app --no-cache` — a URL

@@ -18,7 +18,7 @@
 }
 
 # ============================================
-# WEB SERVICE REST
+# WEB API REST
 # ============================================
 {$WEB_API_REST_DOMAIN} {
 	import hardening
