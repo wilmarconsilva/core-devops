@@ -138,13 +138,38 @@ export IMAGE_TAG=0.0.0
 echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_OWNER --password-stdin
 
 # API
-docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest:1.1.0 -t ghcr.io/$GHCR_OWNER/core-web-api-rest:latest ../core-back-end
+docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest:latest ../core-back-end
 
 # Web — a URL da API é embutida agora, no build
-docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile --build-arg EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br -t ghcr.io/$GHCR_OWNER/core-web-app:1.1.0 -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
+docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile --build-arg EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br -t ghcr.io/$GHCR_OWNER/core-web-app:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
 
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app
+```
+
+```PowerShell
+$env:GHCR_OWNER = "wilmarconsilva"
+$env:IMAGE_TAG = "0.0.0"
+
+echo $env:GHCR_TOKEN | docker login ghcr.io -u $env:GHCR_OWNER --password-stdin
+
+# API
+docker build --platform linux/amd64 `
+  -f ../core-back-end/Docker/Dockerfile.Web.API.REST `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest:$env:IMAGE_TAG" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest:latest" `
+  ../core-back-end
+
+# Web — a URL da API é embutida no build
+docker build --platform linux/amd64 `
+  -f ../core-front-end/Docker/Dockerfile `
+  --build-arg "EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-app:$env:IMAGE_TAG" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-app:latest" `
+  ../core-front-end
+
+docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-api-rest"
+docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-app"
 ```
 
 `--platform linux/amd64` não é opcional em Mac Apple Silicon ou em qualquer host ARM: sem ele a
