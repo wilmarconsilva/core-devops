@@ -82,6 +82,9 @@ services:
       Email__Username: ${EMAIL_USERNAME:-}
       Email__Password: ${EMAIL_PASSWORD:-}
       Email__EnableSsl: ${EMAIL_ENABLE_SSL:-true}
+
+      Swagger__Username: ${SWAGGER_USERNAME:-}
+      Swagger__Password: ${SWAGGER_PASSWORD:-CHANGE-ME}
     expose:
       - "8080"
     healthcheck:
