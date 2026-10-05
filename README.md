@@ -360,3 +360,30 @@ origens distintas, então o modo por portas exercita o CORS que o roteamento por
    agregador (Loki/Seq) a um volume de arquivo.
 3. **Monitoramento externo**: aponte um uptime monitor (UptimeRobot, BetterStack) para
    `https://api.../health` e `https://app.../`. O VPS não avisa quando cai.
+
+---
+
+## 10. Mensagens de commit
+
+Seguem o [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/), com o ticket do Jira no rodapé:
+
+```
+<tipo>: <descrição>
+
+Refs: Jira - DEV-<número>
+```
+
+Exemplo:
+
+```
+feat: Geração de PDF de Pedidos e Orçamentos
+
+Refs: Jira - DEV-28
+```
+
+- Tipos: `feat` (funcionalidade), `fix` (correção), `refactor`, `perf`, `test`, `docs`, `style`, `build` (dependências, versões), `ci`, `chore` (manutenção sem impacto no código de produção).
+- Descrição: em português, no imperativo ou com o título do ticket no Jira; sem ponto final.
+- O ticket fica **somente** no rodapé `Refs: Jira - DEV-XX`, nunca no título (não usar `feat: DEV-28: ...` nem `feat: Jira - DEV-28: ...`).
+- Commits sem ticket (ex.: `build: bump to version 1.2.0`) omitem o rodapé `Refs`.
+- Em squash merge de PR, o GitHub acrescenta `(#n)` ao título: mantenha-o e remova do corpo a lista repetida de mensagens dos commits da branch.
+- Outros trailers (ex.: `Co-Authored-By`) vêm depois do `Refs`, no mesmo bloco de rodapé.
