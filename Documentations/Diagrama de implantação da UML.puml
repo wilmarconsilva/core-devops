@@ -1,0 +1,32 @@
+@startuml Core — Diagrama de Implantação em UML
+title Core — Diagrama de Implantação em UML
+
+skinparam shadowing false
+
+node "Dispositivo do usuário" <<device>> {
+  node "Navegador" <<executionEnvironment>> as browser
+}
+
+node "GitHub Container Registry" <<device>> as ghcr
+
+node "Let's Encrypt" <<device>> as letsencrypt
+
+node "VPS" <<device>> {
+  node "Docker Engine" <<executionEnvironment>> as docker {
+    node "proxy\n(Caddy)" <<container>> as proxy
+    node "web-app\n(nginx)" <<container>> as webapp
+    node "web-api-rest\n(.NET 10)" <<container>> as api
+    node "postgres" <<container>> as postgres
+    database "postgres-data" <<volume>> as vol_pg
+  }
+}
+
+browser --> proxy : HTTPS
+proxy --> webapp : HTTP
+proxy --> api : HTTP
+api --> postgres
+postgres --> vol_pg
+proxy --> letsencrypt : certificado TLS
+docker --> ghcr : pull das imagens
+
+@enduml

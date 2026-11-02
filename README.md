@@ -25,7 +25,7 @@ Core/
               └───┬─────────┬───┘
        app.dominio│         │api.dominio
               ┌────▼────┐ ┌───▼────┐
-              │ web-app │ │  api   │  (rede "edge")
+              │ web-app │ │ web-api│  (rede "edge")
               │  nginx  │ │ Kestrel│
               └─────────┘ └───┬────┘
                             │ (rede "data")
