@@ -65,7 +65,7 @@ services:
       # O Program.cs carrega o .env com NoClobber, então estas variáveis sempre prevalecem.
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
 
-      JWT__SIGNING_KEY: ${JWT__SIGNING_KEY}
+      Jwt__SigningKey: ${JWT__SIGNING_KEY}
       Jwt__Issuer: ${JWT__ISSUER:-Core.WebService}
       Jwt__Audience: ${JWT__AUDIENCE:-Core.Client}
       Jwt__AccessTokenExpirationMinutes: ${JWT__ACCESS_TOKEN_EXPIRATION_MINUTES:-30}
