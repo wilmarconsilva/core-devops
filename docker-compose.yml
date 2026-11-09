@@ -107,11 +107,15 @@ services:
       dockerfile: Docker/Dockerfile
       args:
         # Variáveis EXPO_PUBLIC_* são embutidas no bundle em tempo de BUILD.
-        # Trocar a URL da API exige rebuild da imagem — não basta reiniciar o container.
-        EXPO_PUBLIC_WEB_API_REST_URL: "https://${WEB_API_REST_DOMAIN}"
+        # Trocar o modo de operação exige rebuild da imagem — não basta reiniciar o container.
         EXPO_PUBLIC_OPERATION_MODE: ${EXPO_PUBLIC_OPERATION_MODE:-}
     image: core-web-app:local
     restart: unless-stopped
+    environment:
+      # Lida na INICIALIZAÇÃO do container (Docker/runtime-config.sh do front), não no build:
+      # a mesma imagem serve qualquer ambiente. Trocar a URL exige só recriar o container
+      # (docker compose up -d web-app). Sem ela, ou com valor inválido, o container não sobe.
+      WEB_API_REST_URL: "https://${WEB_API_REST_DOMAIN:?defina WEB_API_REST_DOMAIN no .env}"
     expose:
       - "8080"
     healthcheck:

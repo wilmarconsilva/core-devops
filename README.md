@@ -122,10 +122,13 @@ Token: um PAT *classic* com escopo **`write:packages`** para publicar (e `read:p
 no VPS). No GitHub Actions não precisa de PAT — o `GITHUB_TOKEN` do próprio job serve, desde que o
 workflow declare `permissions: packages: write`.
 
-> ⚠️ **A URL da API é embutida no bundle do front em tempo de build**, então ela é um `--build-arg`
-> (`EXPO_PUBLIC_WEB_API_REST_URL`) e **não** uma variável de runtime: a imagem `core-web-app` fica
-> atrelada ao ambiente. Publique tags distintas por ambiente (ex.: `core-web-app:prod-<sha>`) e nunca
-> reaproveite a imagem de staging em produção.
+> ℹ️ **A imagem `core-web-app` não depende do ambiente.** A URL da API é lida na inicialização do
+> container, pela variável `WEB_API_REST_URL` (o compose a monta como `https://${WEB_API_REST_DOMAIN}`).
+> O script `Docker/runtime-config.sh` do front gera o `/runtime-config.js`, carregado pelo `index.html`
+> antes do bundle. A mesma tag pode ser promovida de homologação para produção. Se a variável faltar
+> ou for inválida, o container não sobe.
+>
+> Só `EXPO_PUBLIC_OPERATION_MODE` continua embutida no build (`--build-arg`).
 
 ### 5.1 Na máquina local via terminal
 
@@ -140,8 +143,8 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_OWNER --password-stdin
 # API
 docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest:latest ../core-back-end
 
-# Web — a URL da API é embutida agora, no build
-docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile --build-arg EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br -t ghcr.io/$GHCR_OWNER/core-web-app:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
+# Web — a mesma imagem serve todos os ambientes (URL da API definida no container, via WEB_API_REST_URL)
+docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile -t ghcr.io/$GHCR_OWNER/core-web-app:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
 
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app
@@ -160,10 +163,9 @@ docker build --platform linux/amd64 `
   -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest:latest" `
   ../core-back-end
 
-# Web — a URL da API é embutida no build
+# Web — a mesma imagem serve todos os ambientes (URL da API definida no container, via WEB_API_REST_URL)
 docker build --platform linux/amd64 `
   -f ../core-front-end/Docker/Dockerfile `
-  --build-arg "EXPO_PUBLIC_WEB_API_REST_URL=https://cliente.core.api-rest.com.br" `
   -t "ghcr.io/$env:GHCR_OWNER/core-web-app:$env:IMAGE_TAG" `
   -t "ghcr.io/$env:GHCR_OWNER/core-web-app:latest" `
   ../core-front-end
@@ -239,10 +241,12 @@ pg_dump "<connection-string-de-origem>" --format=plain --no-owner | gzip -9 > or
 gunzip -c origem.sql.gz | dc exec -T postgres psql -U core -d core
 ```
 
-> ⚠️ Trocar de domínio **não** é operação de deploy: a URL da API está embutida no bundle do front
-> (`EXPO_PUBLIC_WEB_API_REST_URL`, lido em `Application/Services/HttpClientService.ts`), fixada no
-> build da imagem — é preciso publicar uma imagem nova (§5). Puxar a mesma tag e reiniciar o
-> container não muda nada.
+> ℹ️ Para trocar o domínio da API, basta ajustar `WEB_API_REST_DOMAIN` no `.env` e recriar o
+> container (`dc up -d web-app`); não é preciso publicar imagem nova. A URL chega ao front pelo
+> `/runtime-config.js`, que o nginx serve com `no-cache` e o service worker busca com network-first.
+> Assim os usuários online recebem a URL nova no próximo carregamento. Um PWA aberto offline continua
+> com a última configuração em cache até voltar a ficar online. Lembre-se de ajustar também o
+> `WEB_APP_DOMAIN` se o domínio do front mudar, porque o CORS da API depende dele.
 
 ---
 
@@ -298,12 +302,12 @@ docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d 
 
 - **Teste local (sua máquina)**: acesse `http://localhost/` (web-app) e `http://localhost:8080/health`
   (api). Não precisa mexer em `PUBLIC_HOST`.
-- **VPS sem domínio ainda**: antes do `--build`, defina no `.env` `PUBLIC_HOST=<IP público do VPS>`
-  — é isso que faz o front embutir a URL correta da API e o CORS liberar essa origem. Acesse
+- **VPS sem domínio ainda**: antes de subir, defina no `.env` `PUBLIC_HOST=<IP público do VPS>`
+  — é isso que faz o front apontar para a URL correta da API e o CORS liberar essa origem. Acesse
   `http://<IP>/`, e libere a porta da API no firewall (`sudo ufw allow 8080/tcp`).
 
 A porta da API é configurável por `API_PORT` no `.env` (padrão 8080) — a mesma variável alimenta o
-bloco do Caddy, a publicação de porta do proxy e a URL embutida no front, então não há como
+bloco do Caddy, a publicação de porta do proxy e a URL da API no front, então não há como
 divergirem. **A porta do web é fixa na 80** de propósito: o navegador omite a porta padrão no
 header `Origin`, então `Cors__Origins__0` pode ser apenas `http://HOST`. Se o web saísse da 80, a
 origem passaria a carregar a porta — e `http://HOST:80` **não** casa com o `http://HOST` que o
@@ -314,9 +318,9 @@ Quando o domínio estiver pronto: pare a stack, apague `PUBLIC_HOST` do `.env`, 
 (`docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d`, como na §6) para
 voltar a usar TLS automático.
 
-> ⚠️ Assim como no fluxo com domínio, trocar `PUBLIC_HOST` depois de já ter buildado exige
-> `docker compose -f docker-compose.yml -f docker-compose.without-domain.yml build web-app --no-cache` — a URL
-> da API é embutida no bundle em tempo de build, reiniciar o container não muda nada.
+> ℹ️ Trocar `PUBLIC_HOST` não exige rebuild: basta recriar os containers
+> (`docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d`). A URL da API é
+> lida na inicialização do `web-app`.
 
 ### Por que porta, e não caminho único (`/api/*`)
 

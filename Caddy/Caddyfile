@@ -55,7 +55,7 @@
 # ALTERNATIVA: domínio único (front em / e API em /api)
 # ============================================
 # Elimina CORS e cookie cross-site, ao custo de acoplar as duas apps ao mesmo host.
-# Requer rebuild do front com EXPO_PUBLIC_WEB_SERVICE_URL=https://SEU_DOMINIO/api.
+# Requer WEB_API_REST_URL=https://SEU_DOMINIO/api no container web-app (sem rebuild).
 # As rotas dos controllers NÃO têm prefixo /api (ex.: /budgets, /authentication),
 # por isso o handle_path remove o prefixo antes de repassar.
 #

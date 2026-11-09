@@ -12,8 +12,8 @@
 #   http://localhost/        (web)   — ou http://PUBLIC_HOST/ se definido no .env
 #   http://localhost:8080/   (api)   — ou a porta definida em API_PORT
 #
-# Deploy em VPS sem domínio: defina PUBLIC_HOST=<IP do VPS> no .env antes do build,
-# para o front embutir a URL correta da API e o CORS liberar essa origem. Libere as
+# Deploy em VPS sem domínio: defina PUBLIC_HOST=<IP do VPS> no .env antes de subir,
+# para o front apontar para a URL correta da API e o CORS liberar essa origem. Libere as
 # duas portas no firewall (ufw allow 80/tcp e ufw allow 8080/tcp).
 services:
   web-api-rest:
@@ -25,9 +25,8 @@ services:
       Cors__Origins__0: "http://${PUBLIC_HOST:-localhost}"
 
   web-app:
-    build:
-      args:
-        EXPO_PUBLIC_WEB_API_REST_URL: "http://${PUBLIC_HOST:-localhost}:${WEB_API_REST_PORT:-8080}"
+    environment:
+      WEB_API_REST_URL: "http://${PUBLIC_HOST:-localhost}:${WEB_API_REST_PORT:-8080}"
 
   proxy:
     environment:
