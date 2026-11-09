@@ -4,7 +4,7 @@
 #
 # Uso:
 #   cp .env.example .env
-#   # ajuste ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY; WEB_API_REST_DOMAIN/WEB_APP_DOMAIN
+#   # ajuste ao menos POSTGRES_PASSWORD e JWT__SIGNING_KEY; WEB_API_REST_DOMAIN/WEB_APP_DOMAIN
 #   # podem ficar com o valor de exemplo, não são usados neste overlay.
 #   docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
 #

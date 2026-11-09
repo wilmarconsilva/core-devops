@@ -208,7 +208,7 @@ cd core-deploy
 
 cp .env.example .env
 openssl rand -base64 32   # -> POSTGRES_PASSWORD
-openssl rand -base64 48   # -> JWT_SIGNING_KEY
+openssl rand -base64 48   # -> JWT__SIGNING_KEY
 nano .env                 # domínios, e-mail do ACME, SMTP, GHCR_OWNER, IMAGE_TAG
 
 # GHCR: um token com escopo read:packages basta para puxar
@@ -294,7 +294,7 @@ Como no compose base, **só o proxy publica portas**; `api` e `web-app` continua
 
 ```bash
 cp .env.example .env
-# preencha ao menos POSTGRES_PASSWORD e JWT_SIGNING_KEY (openssl rand ...);
+# preencha ao menos POSTGRES_PASSWORD e JWT__SIGNING_KEY (openssl rand ...);
 # WEB_API_REST_DOMAIN/WEB_APP_DOMAIN podem ficar com o valor de exemplo, este overlay não os usa.
 
 docker compose -f docker-compose.yml -f docker-compose.without-domain.yml up -d --build
