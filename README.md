@@ -111,8 +111,8 @@ As duas imagens vivem no GHCR (GitHub Container Registry), e é delas que o VPS 
 
 | Imagem | Contexto de build | Dockerfile |
 | --- | --- | --- |
-| `ghcr.io/<owner>/core-web-api-rest` | repositório do back-end | `Docker/Dockerfile.Web.API.REST` |
-| `ghcr.io/<owner>/core-web-app` | repositório do front-end | `Docker/Dockerfile` |
+| `ghcr.io/<owner>/core-web-api-rest-tcc` | repositório do back-end | `Docker/Dockerfile.Web.API.REST` |
+| `ghcr.io/<owner>/core-web-app-tcc` | repositório do front-end | `Docker/Dockerfile` |
 
 `<owner>` é o dono do pacote no GitHub (o mesmo valor de `GHCR_OWNER` no `.env`) e **tem que estar
 em minúsculas** — o GHCR rejeita maiúsculas no caminho da imagem. A tag é o que o VPS escolhe em
@@ -122,7 +122,7 @@ Token: um PAT *classic* com escopo **`write:packages`** para publicar (e `read:p
 no VPS). No GitHub Actions não precisa de PAT — o `GITHUB_TOKEN` do próprio job serve, desde que o
 workflow declare `permissions: packages: write`.
 
-> ℹ️ **A imagem `core-web-app` não depende do ambiente.** A URL da API é lida na inicialização do
+> ℹ️ **A imagem `core-web-app-tcc` não depende do ambiente.** A URL da API é lida na inicialização do
 > container, pela variável `WEB_API_REST_URL` (o compose a monta como `https://${WEB_API_REST_DOMAIN}`).
 > O script `Docker/runtime-config.sh` do front gera o `/runtime-config.js`, carregado pelo `index.html`
 > antes do bundle. A mesma tag pode ser promovida de homologação para produção. Se a variável faltar
@@ -141,13 +141,13 @@ export IMAGE_TAG=0.0.0
 echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_OWNER --password-stdin
 
 # API
-docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest:latest ../core-back-end
+docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:latest ../core-back-end
 
 # Web — a mesma imagem serve todos os ambientes (URL da API definida no container, via WEB_API_REST_URL)
-docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile -t ghcr.io/$GHCR_OWNER/core-web-app:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app:latest ../core-front-end
+docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:latest ../core-front-end
 
-docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest
-docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app
+docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc
+docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app-tcc
 ```
 
 ```PowerShell
@@ -159,19 +159,19 @@ echo $env:GHCR_TOKEN | docker login ghcr.io -u $env:GHCR_OWNER --password-stdin
 # API
 docker build --platform linux/amd64 `
   -f ../core-back-end/Docker/Dockerfile.Web.API.REST `
-  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest:$env:IMAGE_TAG" `
-  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest:latest" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest-tcc:$env:IMAGE_TAG" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-api-rest-tcc:latest" `
   ../core-back-end
 
 # Web — a mesma imagem serve todos os ambientes (URL da API definida no container, via WEB_API_REST_URL)
 docker build --platform linux/amd64 `
   -f ../core-front-end/Docker/Dockerfile `
-  -t "ghcr.io/$env:GHCR_OWNER/core-web-app:$env:IMAGE_TAG" `
-  -t "ghcr.io/$env:GHCR_OWNER/core-web-app:latest" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-app-tcc:$env:IMAGE_TAG" `
+  -t "ghcr.io/$env:GHCR_OWNER/core-web-app-tcc:latest" `
   ../core-front-end
 
-docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-api-rest"
-docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-app"
+docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-api-rest-tcc"
+docker push --all-tags "ghcr.io/$env:GHCR_OWNER/core-web-app-tcc"
 ```
 
 `--platform linux/amd64` não é opcional em Mac Apple Silicon ou em qualquer host ARM: sem ele a
@@ -180,7 +180,7 @@ imagem sai `arm64` e o VPS (x86) recusa com `exec format error`. Em host x86 o p
 Conferir o que foi publicado:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/$GHCR_OWNER/core-web-api-rest:$IMAGE_TAG
+docker buildx imagetools inspect ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:$IMAGE_TAG
 ```
 
 ### 5.2 Visibilidade do pacote
@@ -223,7 +223,7 @@ dc logs -f web-api-rest    # acompanhe "Migrations aplicadas com sucesso."
 ```
 
 O overlay `docker-compose.registry.yml` troca o `build` pelas imagens
-`ghcr.io/${GHCR_OWNER}/core-web-api-rest` e `.../core-web-app` na tag de `IMAGE_TAG` (padrão
+`ghcr.io/${GHCR_OWNER}/core-web-api-rest-tcc` e `.../core-web-app-tcc` na tag de `IMAGE_TAG` (padrão
 `latest`). Os repositórios das aplicações **não** precisam ser clonados no VPS — só este diretório.
 
 Validação:

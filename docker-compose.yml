@@ -51,7 +51,7 @@ services:
     build:
       context: ../core-back-end
       dockerfile: Docker/Dockerfile.Web.API.REST
-    image: core-web-api-rest:local
+    image: core-web-api-rest-tcc:local
     restart: unless-stopped
     depends_on:
       postgres:
@@ -109,7 +109,7 @@ services:
         # Variáveis EXPO_PUBLIC_* são embutidas no bundle em tempo de BUILD.
         # Trocar o modo de operação exige rebuild da imagem — não basta reiniciar o container.
         EXPO_PUBLIC_OPERATION_MODE: ${EXPO_PUBLIC_OPERATION_MODE:-}
-    image: core-web-app:local
+    image: core-web-app-tcc:local
     restart: unless-stopped
     environment:
       # Lida na INICIALIZAÇÃO do container (Docker/runtime-config.sh do front), não no build:
