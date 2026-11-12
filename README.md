@@ -141,10 +141,10 @@ export IMAGE_TAG=0.0.0
 echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_OWNER --password-stdin
 
 # API
-docker build --platform linux/amd64 -f ../core-back-end/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:latest ../core-back-end
+docker build --platform linux/amd64 -f ../core-back-end-tcc/Docker/Dockerfile.Web.API.REST -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc:latest ../core-back-end-tcc
 
 # Web — a mesma imagem serve todos os ambientes (URL da API definida no container, via WEB_API_REST_URL)
-docker build --platform linux/amd64 -f ../core-front-end/Docker/Dockerfile -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:latest ../core-front-end
+docker build --platform linux/amd64 -f ../core-front-end-tcc/Docker/Dockerfile -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:$IMAGE_TAG -t ghcr.io/$GHCR_OWNER/core-web-app-tcc:latest ../core-front-end-tcc
 
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-api-rest-tcc
 docker push --all-tags ghcr.io/$GHCR_OWNER/core-web-app-tcc
